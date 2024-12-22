@@ -3,7 +3,7 @@ project(k808 C)
 
 set(CMAKE_C_STANDARD 17)
 
-add_executable(k808 main.c
-        driver.c)
-target_include_directories(k808 PRIVATE /usr/include/libevdev-1.0)
-target_link_libraries(k808 evdev pthread)
+set(SERVER_PATH "/run/k808.sock" CACHE FILEPATH "Path to the server directory")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DK808_SERVER=\\\"${SERVER_PATH}\\\"")
+
+add_subdirectory(server)
