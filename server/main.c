@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,20 +51,20 @@ void on_key(const enum k808_key key, const enum k808_event event, void *user) {
   }
 }
 
-void on_server_message(struct server *srv, const int len, const char *msg, void *) {
+enum server_response on_server_message(struct server *srv, const size_t len, const char *msg, void *) {
   if (len < 8) {
-    fprintf(stderr, "Invalid message length: %d (expected 8 or more)\n", len);
-    return;
+    fprintf(stderr, "Invalid message length: %lu (expected 8 or more)\n", len);
+    return SERVER_CLOSE_CONN;
   }
 
   if (msg[0] != 'K' || msg[1] != '8' || msg[2] != '0' || msg[3] != '8') {
     fprintf(stderr, "Invalid message header: %c%c%c%c\n", msg[0], msg[1], msg[2], msg[3]);
-    return;
+    return SERVER_CLOSE_CONN;
   }
 
   const uint32_t actual_len = *(uint32_t *)(msg + 4);
   if (len != actual_len + 8) {
-    fprintf(stderr, "Invalid lengths: expected %d, but got %d\n", actual_len + 8, len);
+    fprintf(stderr, "Invalid lengths: expected %d, but got %lu\n", actual_len + 8, len);
   }
 
   fprintf(stderr, "Message: '%.*s'", actual_len, msg + 8);
@@ -72,17 +73,34 @@ void on_server_message(struct server *srv, const int len, const char *msg, void 
     fprintf(stderr, "[K808] Received quit request...\n");
     server_stop(srv);
   }
+
+  return SERVER_CLOSE_CONN;
+}
+
+static struct k808 *k808;
+static struct server *srv;
+
+void signal_handler(int) {
+  printf(" --- Exit signal received! --- \n");
+  server_stop(srv);
+  server_free(srv);
+  k808_stop_sync(k808);
+  k808_free(k808);
 }
 
 int main(void) {
-  struct k808 *k808 = init_k808();
+  k808 = init_k808();
   struct k808_layer *layer = k808_add_layer(k808, "default");
 #define X(k) k808_register_handler(layer, k, on_key, k808);
   K808_X_KEYS
 #undef X
   if (k808_start_async(k808) != K808_RUNNING) return EXIT_FAILURE;
 
-  struct server *srv = init_server(K808_SERVER, on_server_message, NULL);
+  srv = init_server(K808_SERVER, on_server_message, NULL);
+
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
+
   server_run(srv);
   server_free(srv);
 

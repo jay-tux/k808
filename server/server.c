@@ -58,7 +58,11 @@ void server_run(struct server *srv) {
 
     size_t len = recv(accept_fd, buf, sizeof(buf), 0);
     while (len != 0) {
-      srv->handler(srv, len, buf, srv->user);
+      const enum server_response resp = srv->handler(srv, len, buf, srv->user);
+      if (resp == SERVER_CLOSE_CONN) {
+        close(accept_fd);
+        break;
+      }
       len = recv(accept_fd, buf, sizeof(buf), 0);
     }
   }
